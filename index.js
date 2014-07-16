@@ -2,6 +2,7 @@ var EventEmitter = require('events').EventEmitter;
 var dgram = require('dgram');
 var net = require('net');
 var dns = require('dns');
+var _ = require('underscore');
 
 var bitSlice = function(b, offset, length) {
 	return (b >>> (7-(offset+length-1))) & ~(0xff << length);
@@ -186,8 +187,8 @@ var lookup = function(addr, callback) {
 	dns.lookup(addr, callback);
 };
 
-exports.createServer = function(proxy) {
-	proxy = proxy || '8.8.8.8';
+exports.createServer = function(nameServerList) {
+	nameServerList = nameServerList || ['8.8.8.8'];
 
 	var that = new EventEmitter();
 	var server = dgram.createSocket('udp4');
@@ -205,18 +206,45 @@ exports.createServer = function(proxy) {
 		};
 
 		var onerror = function(err) {
+			console.log(err);
 			that.emit('error', err);
+		};
+		var randomNameServer = function(){
+			var len = nameServerList.length;
+			return nameServerList[_.random(0 , len)];
 		};
 
 		var onproxy = function() {
 			var sock = dgram.createSocket('udp4');
+			var nameServer = randomNameServer();
 
-			sock.send(message, 0, message.length, 53, proxy);
-			sock.on('error', onerror);
-			sock.on('message', function(response) {
+			var startTime = new Date();
+			sock.send(message, 0, message.length, 53, nameServer);
+
+			var timer = setTimeout(function(){
+				sock.close();
+			}, 5000);
+
+
+			sock.on('message', function(response, rinfo) {
+				var endTime = new Date();
+				var queryTime = endTime - startTime; //ms
+				var res = {'domain':domain, 'queryTime' : queryTime,
+					'nameServer' : rinfo
+				};
+				console.dir(res);
 				respond(response);
 				sock.close();
+				clearTimeout(timer);
 			});
+			sock.on('error', function(err) {
+				console.log(err);
+				clearTimeout(timer);
+				that.emit('error', err);
+			});
+			sock.on("close" , function(){
+				console.log('closed');
+			})
 		};
 
 		for (var i = 0; i < routes.length; i++) {

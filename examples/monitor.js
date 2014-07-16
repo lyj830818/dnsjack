@@ -1,8 +1,13 @@
 var router = require('../index');
+var fs = require('fs');
 
-var dns = router.createServer();
+var txt = fs.readFileSync('checked.txt', 'utf-8');
+nameServerList = txt.split("\n");
 
-dns.route('example.com', '127.0.0.1');
+
+var dns = router.createServer( nameServerList);
+
+//dns.route('example.com', '127.0.0.1');
 
 dns.on('resolve', function(domain) {
 	console.log('wanna resolve ' + domain);
